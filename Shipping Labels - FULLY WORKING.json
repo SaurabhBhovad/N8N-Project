@@ -1,0 +1,261 @@
+{
+  "name": "Shipping Labels - FULLY WORKING",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "8bd70c38-01d9-4b1c-9afd-5676168dbe2b",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        5872,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "104wkpcnB5XrqXlr3DoWuEzq3gC3PnrYYgzTLsg-dVoE",
+          "mode": "list",
+          "cachedResultName": "Labels",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/104wkpcnB5XrqXlr3DoWuEzq3gC3PnrYYgzTLsg-dVoE/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/104wkpcnB5XrqXlr3DoWuEzq3gC3PnrYYgzTLsg-dVoE/edit#gid=0"
+        },
+        "options": {}
+      },
+      "id": "c075e956-e184-4539-ae03-78bae8dc397d",
+      "name": "Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        6096,
+        608
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YQLdXJjDCIyBC3se",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Collect all rows into one item\nconst rows = $input.all().map(item => item.json);\nreturn [{ json: { shippingData: rows } }];"
+      },
+      "id": "7118fb04-45d0-43c6-b3c7-1a39a821fca4",
+      "name": "Aggregate All Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6320,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build complete shipping label HTML directly — no AI needed\nconst rows = $input.first().json.shippingData || [];\n\nfunction safe(val) {\n  return String(val == null ? '' : val)\n    .replace(/&/g,'&amp;')\n    .replace(/</g,'&lt;')\n    .replace(/>/g,'&gt;');\n}\n\nconst LABELS_PER_PAGE = 8;\nconst pages = [];\nfor (let i = 0; i < rows.length; i += LABELS_PER_PAGE) {\n  pages.push(rows.slice(i, i + LABELS_PER_PAGE));\n}\n\nfunction makeLabel(row, idx) {\n  if (!row) return '<div class=\"label empty\"></div>';\n  return `\n    <div class=\"label\">\n      <div class=\"label-to\">TO:</div>\n      <div class=\"label-name\">${safe(row['Name'])}</div>\n      <div class=\"label-line\">&#128222; ${safe(row['Phone Number'])}</div>\n      <div class=\"label-line\">${safe(row['Address 1'])}</div>\n      <div class=\"label-line\">${safe(row['Address 2'])}</div>\n      <div class=\"label-pin\">PIN: ${safe(row['Pin Code'])}</div>\n      <div class=\"barcode\">${Array.from({length:28},(_,i)=>`<span style=\"height:${6+Math.abs(Math.sin(i*1.3)*8)|0}px\"></span>`).join('')}</div>\n    </div>`;\n}\n\nfunction makePage(pageRows, pageIdx) {\n  const padded = [...pageRows];\n  while (padded.length < LABELS_PER_PAGE) padded.push(null);\n  return `<div class=\"page\"><div class=\"grid\">${padded.map((r,i)=>makeLabel(r, pageIdx*8+i)).join('')}</div></div>`;\n}\n\nconst html = `<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"UTF-8\">\n<style>\n*{margin:0;padding:0;box-sizing:border-box;}\nbody{font-family:Arial,sans-serif;background:#fff;}\n.page{\n  width:210mm;min-height:297mm;\n  padding:6mm;\n  page-break-after:always;\n}\n.grid{\n  display:grid;\n  grid-template-columns:1fr 1fr;\n  grid-template-rows:repeat(4,1fr);\n  gap:4mm;\n  width:100%;\n  height:285mm;\n}\n.label{\n  border:1.5px solid #000;\n  border-radius:4px;\n  padding:4mm;\n  display:flex;\n  flex-direction:column;\n  gap:1.2mm;\n  background:#fff;\n  position:relative;\n}\n.label.empty{border:1.5px dashed #ccc;background:#fafafa;}\n.label-to{font-size:8pt;font-weight:bold;color:#555;letter-spacing:1px;}\n.label-name{font-size:13pt;font-weight:bold;color:#000;border-bottom:1px solid #ddd;padding-bottom:1.5mm;margin-bottom:1mm;}\n.label-line{font-size:8.5pt;color:#333;line-height:1.5;}\n.label-pin{font-size:11pt;font-weight:bold;color:#000;margin-top:auto;padding-top:1.5mm;border-top:1px solid #ddd;letter-spacing:2px;}\n.barcode{display:flex;align-items:flex-end;gap:1.5px;height:14px;margin-top:2mm;}\n.barcode span{width:2px;background:#000;display:inline-block;}\n@media print{\n  body{margin:0;}\n  .page{page-break-after:always;}\n  @page{size:A4;margin:0;}\n}\n</style>\n</head>\n<body>\n${pages.map((p,i)=>makePage(p,i)).join('')}\n</body>\n</html>`;\n\nreturn [{ json: { html, total: rows.length } }];"
+      },
+      "id": "6f28e924-4d42-43d0-9e57-a77e5c11705c",
+      "name": "Build Label HTML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6544,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pdfendpoint.com/v1/convert",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "htmlcsstopdfApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer pdfe_live_2646353bdf203d1b866a328afba6f138a668"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "html",
+              "value": "={{ $json.html }}"
+            },
+            {
+              "name": "page_size",
+              "value": "A4"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "243f2dff-d09b-45f2-a717-66a87c05c6f0",
+      "name": "Convert HTML to PDF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        6752,
+        608
+      ],
+      "credentials": {
+        "htmlcsstopdfApi": {
+          "id": "BIgjgTpOk5fVRa3E",
+          "name": "HTML to PDF account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.data.url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "06914cd9-07f9-419a-8efb-ff4c8ae4d483",
+      "name": "Download PDF File",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        6976,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "subject": "=Shipping Labels - {{ $now.format('DD MMM YYYY HH:mm') }}",
+        "message": "Automated Labels",
+        "additionalFields": {
+          "attachmentsUi": {
+            "attachmentsBinary": [
+              {
+                "property": "data"
+              }
+            ]
+          }
+        }
+      },
+      "id": "ef7827bd-3310-4610-826e-8ae8c529001a",
+      "name": "Email PDF to Yourself",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 1,
+      "position": [
+        7232,
+        608
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "K5fMRJhBgwHmpYde",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "Aggregate All Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate All Rows": {
+      "main": [
+        [
+          {
+            "node": "Build Label HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Label HTML": {
+      "main": [
+        [
+          {
+            "node": "Convert HTML to PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert HTML to PDF": {
+      "main": [
+        [
+          {
+            "node": "Download PDF File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download PDF File": {
+      "main": [
+        [
+          {
+            "node": "Email PDF to Yourself",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "27743de6-7532-4baa-8119-b711cb626baa",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "1f732b83f8d3a4ed4e5e4ace3e6080cde1e1d14182e38d68feab634c4db11723"
+  },
+  "id": "PzkUKx9PXqiVXunV",
+  "tags": []
+}
